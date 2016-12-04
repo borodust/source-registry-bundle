@@ -1,3 +1,5 @@
+(in-package :cl-user)
+
 (defpackage :source-registry-bundle
   (:use :cl :asdf :alexandria)
   (:export make-bundle))
@@ -51,21 +53,28 @@
 			    (path:catfile dst-path
 					  (file-namestring path)))))))
 
-   
+
 (defun brute-clone-system (system dest-pathspec)
   (let* ((sys-path (fad:pathname-directory-pathname (system-definition-pathname system)))
 	 (dest-path (fad:pathname-as-directory dest-pathspec)))
-    (when sys-path ; uiop doesn't have a definition file
+    (when (and sys-path               ; uiop doesn't have a definition file
+               (> (length (string-trim '(#\Space #\Tab #\Newline) (namestring sys-path))) 0))
       (copy-directory sys-path dest-path))))
 
 
+(defun extract-name (sys-def)
+  (if (listp sys-def)
+      (ecase (first sys-def)
+        (:version (second sys-def)))
+      sys-def))
+
 (defun %list-dependencies (system)
-  (let ((dependencies (system-depends-on system)))
+  (let ((dependencies (mapcar #'extract-name (system-depends-on system))))
     (nconc
      (loop for dependency in dependencies append
-	  (list-dependencies (find-system dependency)))
+          (list-dependencies (find-system dependency)))
      dependencies)))
-       
+
 (defun list-dependencies (system)
   (delete-duplicates (%list-dependencies system) :test 'equal))
 
