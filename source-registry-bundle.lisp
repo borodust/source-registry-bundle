@@ -8,39 +8,6 @@
 (in-package :source-registry-bundle)
 
 
-(defun %list-files (components &optional (base-pathname "./"))
-  (loop for child in components
-     for child-pathname = (component-relative-pathname child) collecting
-       (if (subtypep (class-of child) 'file-component)
-	   (path:catfile base-pathname child-pathname)
-	   (%list-files (component-children child)
-			(path:catdir base-pathname child-pathname)))))
-
-
-(defun list-files (system)
-  (flatten (%list-files (component-children system))))
-
-
-;; this one is too smart
-(defun clone-system (system dest-pathspec)
-  (let* ((sys-path (component-pathname system))
-	 (sys-def-path (system-definition-pathname system))
-	 (dest-path (fad:pathname-as-directory dest-pathspec))
-	 (sources (list-files system)))
-    (when sys-path ; uiop doesn't have a definition file
-      (ensure-directories-exist dest-path)
-      (fad:copy-file sys-def-path
-		     (path:catfile dest-path (file-namestring sys-def-path))
-		     :overwrite t)
-      (loop for source in sources
-	 for src = (path:catfile sys-path source)
-	 for dest = (path:catfile dest-path source)
-	 do
-	   (ensure-directories-exist dest)
-	   (fad:copy-file src dest :overwrite t)
-	 finally (return t)))))
-
-
 (defun copy-directory (src dst)
   (let ((src-path (truename (fad:pathname-as-directory src)))
 	(dst-path (truename (ensure-directories-exist
@@ -48,10 +15,10 @@
     (loop for path in (fad:list-directory src-path) do
 	 (if (fad:directory-pathname-p path)
 	     (let* ((relative (enough-namestring path src-path)))
-	       (copy-directory path (path:catdir dst-path relative)))
+	       (copy-directory path (fad:merge-pathnames-as-directory dst-path relative)))
 	     (fad:copy-file path
-			    (path:catfile dst-path
-					  (file-namestring path)))))))
+			    (fad:merge-pathnames-as-file dst-path
+                                                         (file-namestring path)))))))
 
 
 (defun brute-clone-system (system dest-pathspec)
@@ -84,4 +51,5 @@
 	(dest-path (fad:pathname-as-directory dest-pathspec)))
     (loop for sys-name in (cons (component-name system) (list-dependencies system)) do
 	 (brute-clone-system (find-system sys-name)
-		       (path:catdir dest-path (fad:pathname-as-directory sys-name))))))
+                             (fad:merge-pathnames-as-directory
+                              dest-path (fad:pathname-as-directory sys-name))))))
